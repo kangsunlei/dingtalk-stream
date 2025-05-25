@@ -3,6 +3,8 @@
 日志配置模块
 """
 import logging
+import os
+from datetime import datetime
 from typing import Optional
 
 
@@ -23,19 +25,32 @@ def setup_logger(name: Optional[str] = None, level: str = "INFO") -> logging.Log
     if logger.handlers:
         return logger
     
-    # 创建处理器
-    handler = logging.StreamHandler()
+    # 创建控制台处理器
+    console_handler = logging.StreamHandler()
+    
+    # 创建文件处理器
+    log_dir = "logs"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    log_file = os.path.join(log_dir, f"app_{datetime.now().strftime('%Y%m%d')}.log")
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
     
     # 设置格式化器
     formatter = logging.Formatter(
-        '%(asctime)s %(name)-8s %(levelname)-8s %(message)s [%(filename)s:%(lineno)d]'
+        '%(asctime)s [%(levelname)-8s] %(name)s:%(lineno)d - %(message)s'
     )
-    handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
     
     # 添加处理器到日志记录器
-    logger.addHandler(handler)
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
     
     # 设置日志级别
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+    
+    # 记录启动信息
+    logger.info(f"日志系统初始化完成，日志文件: {log_file}")
     
     return logger

@@ -16,8 +16,8 @@ class DingTalkStreamManager:
     """钉钉Stream客户端管理器"""
     
     def __init__(self, config: AppConfig, logger: Optional[logging.Logger] = None):
-        self.config = config
-        self.logger = logger or logging.getLogger(__name__)
+        self.config: AppConfig = config
+        self.logger: logging.Logger = logger or logging.getLogger(__name__)
         self._client: Optional[dingtalk_stream.DingTalkStreamClient] = None
     
     def initialize_client(self) -> dingtalk_stream.DingTalkStreamClient:
@@ -73,10 +73,16 @@ class DingTalkStreamManager:
             raise
     
     def stop(self) -> None:
-        """停止客户端"""
+        """
+        停止客户端
+        
+        关闭所有连接并清理资源
+        """
         if self._client:
             try:
-                # 这里可以添加清理逻辑
+                self.logger.info("正在停止钉钉Stream客户端...")
+                self._client.stop()
+                self._client = None
                 self.logger.info("钉钉Stream客户端已停止")
             except Exception as e:
                 self.logger.error(f"停止客户端时出错: {str(e)}")
