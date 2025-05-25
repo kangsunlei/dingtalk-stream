@@ -203,7 +203,7 @@ class UniversalMessageHandler(dingtalk_stream.GraphHandler):
                     for url in image_urls:
                         try:
                             text = self.image_service.recognize_text(url)
-                            results.append(f"图片 {url} 中的文字：\n{text}")
+                            results.append(f"图片中包含的文字：\n```\n{text}\n```")
                         except Exception as e:
                             results.append(f"处理图片 {url} 时出错：{str(e)}")
 

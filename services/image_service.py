@@ -101,13 +101,39 @@ class ImageService:
             
             completion = self.client.chat.completions.create(
                 model="qwen-vl-plus",
-                messages=[{
+                messages=[
+                    {
+                        "role": "system",
+                        "content": [{
+                            "type": "text",
+                            "text": """你是一名前端开发工程师，需要将图片中的文字内容转换为结构化配置。请遵循以下规则：
+配置格式：'key'="value"（单引号包裹key，双引号包裹value）
+Key生成规则：
+根据文字在图片中的位置生成层级路径（使用点号分隔）
+常见位置映射：
+导航栏/顶部栏 → nav
+页面标题 → title
+按钮组/操作区 → actions
+表单区域 → form
+列表区域 → list
+底部区域 → footer
+中间主体区域 → main
+当用户提供包含自定义前缀的示例（如'dmx.nav.home'）时：
+自动提取前缀部分（dmx）
+将所有新生成的key添加该前缀（dmx.nav.home → dmx.main.title）
+多条配置项按换行分隔，保持字母小写格式
+严格仅输出配置内容，不包含任何解释说明
+示例输入： [图片包含：顶部导航栏"主页"，中间标题"欢迎使用系统"，底部按钮"立即开始"]
+
+示例输出： 'nav.home'="主页" 'main.title'="欢迎使用系统" 'footer.button'="立即开始"
+
+高级示例： 当用户提供'dmx.nav.home'作为示例时： 'dmx.main.title'="欢迎使用系统" 'dmx.footer.button'="立即开始"
+"""
+                        }]
+                    },
+                    {
                     "role": "user",
                     "content": [
-                        {
-                            "type": "text",
-                            "text": "请识别这张图片中的文字内容"
-                        },
                         {
                             "type": "image_url",
                             "image_url": {
