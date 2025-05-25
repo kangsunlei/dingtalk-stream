@@ -14,7 +14,7 @@
 │   ├── __init__.py
 │   └── universal_message_handler.py  # 通用消息处理器
 ├── requirements.txt          # 依赖包列表
-├── .env.example             # 环境变量配置模板
+├── .env                      # 环境变量配置文件
 └── README.md                # 项目说明文档
 ```
 
@@ -26,19 +26,27 @@ pip install -r requirements.txt
 
 ## 配置
 
-1. 复制环境变量示例文件并修改
+1. 创建环境变量配置文件
 
 ```bash
-cp .env.example .env
+touch .env
 ```
 
-2. 在`.env`文件中填入您的钉钉应用凭证
+2. 在`.env`文件中填入您的钉钉应用凭证和千问 API 密钥
 
 ```
 CLIENT_ID=your_client_id_here
 CLIENT_SECRET=your_client_secret_here
 LOG_LEVEL=INFO
+DASHSCOPE_API_KEY=your_dashscope_api_key_here
 ```
+
+配置说明：
+
+- `CLIENT_ID`: 钉钉应用的客户端 ID，长度不能小于 5 个字符
+- `CLIENT_SECRET`: 钉钉应用的客户端密钥，长度不能小于 5 个字符
+- `LOG_LEVEL`: 日志级别，可选值：DEBUG, INFO, WARNING, ERROR, CRITICAL
+- `DASHSCOPE_API_KEY`: 千问 API 密钥，用于图片文字识别
 
 ## 运行
 
@@ -51,7 +59,10 @@ python app.py
 本应用实现了以下功能：
 
 - **通用消息处理**：处理所有钉钉消息请求
-- **智能内容识别**：自动识别天气查询等特定类型的请求
+- **图片文字识别**：
+  - 自动检测消息中的图片链接
+  - 使用千问 API 识别图片中的文字
+  - 支持 jpg、jpeg、png、gif 格式的图片
 - **详细日志记录**：
   - 同时输出到控制台和文件
   - 日志文件按日期自动分割
@@ -110,3 +121,10 @@ python app.py
 
 - 控制台日志：直接查看终端输出
 - 文件日志：查看 `logs` 目录下的日志文件，格式为 `app_YYYYMMDD.log`
+
+## 注意事项
+
+1. 确保 `.env` 文件存在且包含必要的配置
+2. 确保 `CLIENT_ID` 和 `CLIENT_SECRET` 长度不小于 5 个字符
+3. 日志文件会自动创建在 `logs` 目录下
+4. 使用图片文字识别功能需要配置千问 API 密钥

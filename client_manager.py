@@ -10,6 +10,7 @@ from dingtalk_stream import Credential
 
 from config import AppConfig
 from handlers import UniversalMessageHandler
+from services.image_service import ImageService
 
 
 class DingTalkStreamManager:
@@ -19,6 +20,11 @@ class DingTalkStreamManager:
         self.config: AppConfig = config
         self.logger: logging.Logger = logger or logging.getLogger(__name__)
         self._client: Optional[dingtalk_stream.DingTalkStreamClient] = None
+        
+        # 初始化图片服务
+        self.image_service = ImageService(self.logger)
+        if self.config.dashscope_api_key:
+            self.image_service.set_api_key(self.config.dashscope_api_key)
     
     def initialize_client(self) -> dingtalk_stream.DingTalkStreamClient:
         """
@@ -51,8 +57,8 @@ class DingTalkStreamManager:
         if not self._client:
             raise RuntimeError("客户端尚未初始化")
         
-        # 注册通用消息处理器（兼容天气查询）
-        universal_handler = UniversalMessageHandler(self.logger)
+        # 注册通用消息处理器
+        universal_handler = UniversalMessageHandler(self.logger, self.image_service)
         self._client.register_callback_handler(
             dingtalk_stream.graph.GraphMessage.TOPIC,
             universal_handler

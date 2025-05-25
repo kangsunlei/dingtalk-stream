@@ -6,43 +6,24 @@ import logging
 from typing import Dict, Any, Tuple, Optional
 import json
 import time
-from datetime import datetime
+import re
 
 from dingtalk_stream import AckMessage, CallbackMessage, GraphRequest, GraphResponse
 import dingtalk_stream
 
 from exceptions import HandlerError
+from services.image_service import ImageService
 
 
 class UniversalMessageHandler(dingtalk_stream.GraphHandler):
     """通用消息处理器 - 详细记录所有请求信息"""
     
-    def __init__(self, logger: logging.Logger = None):
+    def __init__(self, logger: logging.Logger = None, image_service: Optional[ImageService] = None):
         super(dingtalk_stream.GraphHandler, self).__init__()
         self.logger = logger or logging.getLogger(__name__)
+        self.image_service = image_service
         self.request_counter = 0
         
-        # 内置模拟天气数据
-        self._weather_data = {
-            '杭州': {
-                'text': '晴天',
-                'temperature': 22,
-                'humidity': 65,
-                'wind_direction': '东南风'
-            },
-            '北京': {
-                'text': '多云',
-                'temperature': 18,
-                'humidity': 45,
-                'wind_direction': '北风'
-            },
-            '上海': {
-                'text': '小雨',
-                'temperature': 20,
-                'humidity': 78,
-                'wind_direction': '东风'
-            }
-        }
 
     async def process(self, callback: CallbackMessage) -> Tuple[str, Dict[str, Any]]:
         """
@@ -199,149 +180,69 @@ class UniversalMessageHandler(dingtalk_stream.GraphHandler):
                 self.logger.warning(f"[{request_id}] 分析业务数据时出错: {str(e)}")
 
     def _create_response_based_on_request(self, request: GraphRequest, request_id: str) -> GraphResponse:
-        """根据请求内容创建适当的响应"""
-        self.logger.info(f"[{request_id}] 开始创建响应...")
-        
-        # 分析请求内容，决定响应类型
-        response_data = None
-        
-        # 检查是否为天气查询
-        if self._is_weather_request(request):
-            self.logger.info(f"[{request_id}] 检测到天气查询请求")
-            response_data = self._get_weather_data()
-        else:
-            # 默认响应：回显请求信息
-            self.logger.info(f"[{request_id}] 使用默认响应模式")
-            response_data = self._create_echo_response(request, request_id)
-        
-        # 创建HTTP响应
+        """根据请求内容创建响应"""
+        try:
+            self.logger.info(f"[{request_id}] 创建响应基于请求")
+            
+            # 获取请求内容
+            if isinstance(request.body, str):
+                body_data = json.loads(request.body)
+            elif isinstance(request.body, dict):
+                body_data = request.body
+            else:
+                return self._create_echo_response(request, request_id)
+                
+            content = body_data.get('input', '')
+            
+            # 提取所有图片URL
+            if self.image_service:
+                image_urls = self.image_service.extract_image_urls(content)
+                if image_urls:
+                    # 处理所有图片
+                    results = []
+                    for url in image_urls:
+                        try:
+                            text = self.image_service.recognize_text(url)
+                            results.append(f"图片 {url} 中的文字：\n{text}")
+                        except Exception as e:
+                            results.append(f"处理图片 {url} 时出错：{str(e)}")
+
+                    self.logger.info(f"[{results}] 处理图片URL完成")
+                    
+                    if results:
+                        return self._create_text_response("\n\n".join(results), request_id)
+            
+            # 默认返回回显响应
+            return self._create_echo_response(request, request_id)
+            
+        except Exception as e:
+            self.logger.error(f"[{request_id}] 创建响应时出错: {str(e)}")
+            raise HandlerError(f"创建响应时出错: {str(e)}")
+
+    def _create_text_response(self, text: str, request_id: str) -> GraphResponse:
+        """创建文本响应"""
         response = GraphResponse()
-        response.status_line.code = 200
-        response.status_line.reason_phrase = 'OK'
-        response.headers['Content-Type'] = 'application/json'
-        response.headers['X-Request-ID'] = request_id
-        response.headers['X-Processed-At'] = datetime.now().isoformat()
-        response.body = json.dumps(response_data, ensure_ascii=False, indent=2)
-        
-        self.logger.info(f"[{request_id}] 响应创建完成")
+        response.body = {
+            'text': text,
+        }
+        self.logger.info(f"[{request_id}] 创建文本响应: {text}")
         return response
 
-    def _get_weather_data(self, location: str = '杭州') -> Dict[str, Any]:
-        """
-        获取天气数据
-        
-        Args:
-            location: 地点名称
-            
-        Returns:
-            天气信息字典
-        """
-        weather = self._weather_data.get(location, self._weather_data['杭州'])
-        
-        return {
-            'type': 'weather_response',
-            'location': location,
-            'dateStr': datetime.now().strftime('%Y-%m-%d'),
-            'text': weather['text'],
-            'temperature': weather['temperature'],
-            'humidity': weather['humidity'],
-            'wind_direction': weather['wind_direction'],
-            'timestamp': datetime.now().isoformat()
+    def _create_echo_response(self, request: GraphRequest, request_id: str) -> GraphResponse:
+        """创建回显响应"""
+        response = GraphResponse()
+        response.body = {
+            'text': f"收到消息: {request.body}",
         }
-
-    def _is_weather_request(self, request: GraphRequest) -> bool:
-        """判断是否为天气查询请求"""
-        weather_keywords = ['天气', '气温', '温度', 'weather', '气候', '下雨', '晴天', '阴天']
-        
-        # 检查URI
-        if hasattr(request, 'request_line') and request.request_line:
-            uri = getattr(request.request_line, 'uri', '')
-            if any(keyword in uri.lower() for keyword in weather_keywords):
-                return True
-        
-        # 检查请求体
-        if hasattr(request, 'body') and request.body:
-            try:
-                if isinstance(request.body, str):
-                    body_text = request.body.lower()
-                    if any(keyword in body_text for keyword in weather_keywords):
-                        return True
-                    
-                    # 尝试解析JSON中的文本字段
-                    try:
-                        body_data = json.loads(request.body)
-                        text_fields = ['query', 'text', 'message', 'content', 'input']
-                        for field in text_fields:
-                            if field in body_data and isinstance(body_data[field], str):
-                                if any(keyword in body_data[field].lower() for keyword in weather_keywords):
-                                    return True
-                    except:
-                        pass
-            except:
-                pass
-        
-        return False
-
-    def _create_echo_response(self, request: GraphRequest, request_id: str) -> Dict[str, Any]:
-        """创建回显响应，包含请求的详细信息"""
-        echo_data = {
-            'type': 'echo_response',
-            'request_id': request_id,
-            'timestamp': datetime.now().isoformat(),
-            'message': '收到您的消息，以下是详细的请求信息分析',
-            'request_analysis': {}
-        }
-        
-        # 添加请求行信息
-        if hasattr(request, 'request_line') and request.request_line:
-            echo_data['request_analysis']['request_line'] = {
-                'method': getattr(request.request_line, 'method', None),
-                'uri': getattr(request.request_line, 'uri', None),
-                'version': getattr(request.request_line, 'version', None)
-            }
-        
-        # 添加请求头信息
-        if hasattr(request, 'headers') and request.headers:
-            echo_data['request_analysis']['headers'] = dict(request.headers)
-        
-        # 添加请求体信息
-        if hasattr(request, 'body') and request.body:
-            try:
-                if isinstance(request.body, str):
-                    try:
-                        echo_data['request_analysis']['body'] = json.loads(request.body)
-                    except json.JSONDecodeError:
-                        echo_data['request_analysis']['body'] = request.body
-                else:
-                    echo_data['request_analysis']['body'] = request.body
-            except Exception as e:
-                echo_data['request_analysis']['body_error'] = str(e)
-        
-        return echo_data
+        self.logger.info(f"[{request_id}] 创建回显响应")
+        return response
 
     def _create_error_response(self, error_message: str, request_id: str = "unknown") -> GraphResponse:
-        """
-        创建错误响应
-        
-        Args:
-            error_message: 错误信息
-            request_id: 请求ID
-            
-        Returns:
-            图响应对象
-        """
+        """创建错误响应"""
         response = GraphResponse()
-        response.status_line.code = 500
-        response.status_line.reason_phrase = 'Internal Server Error'
-        response.headers['Content-Type'] = 'application/json'
-        response.headers['X-Request-ID'] = request_id
-        response.headers['X-Error-At'] = datetime.now().isoformat()
-        response.body = json.dumps({
-            'error': True,
-            'request_id': request_id,
-            'message': error_message,
-            'timestamp': datetime.now().isoformat()
-        }, ensure_ascii=False, indent=2)
-        
+        response.body = {
+            'text': f"处理消息时出错: {error_message}",
+        }
+        self.logger.error(f"[{request_id}] 创建错误响应: {error_message}")
         return response
 

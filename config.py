@@ -17,6 +17,7 @@ class AppConfig:
     client_id: str
     client_secret: str
     log_level: str = "INFO"
+    dashscope_api_key: Optional[str] = None
     
     @classmethod
     def from_env(cls) -> 'AppConfig':
@@ -27,6 +28,7 @@ class AppConfig:
         client_id = os.environ.get('CLIENT_ID')
         client_secret = os.environ.get('CLIENT_SECRET')
         log_level = os.environ.get('LOG_LEVEL', 'INFO')
+        dashscope_api_key = os.environ.get('DASHSCOPE_API_KEY')
         
         if not client_id or not client_secret:
             raise ConfigurationError("请设置环境变量CLIENT_ID和CLIENT_SECRET")
@@ -34,7 +36,8 @@ class AppConfig:
         return cls(
             client_id=client_id,
             client_secret=client_secret,
-            log_level=log_level
+            log_level=log_level,
+            dashscope_api_key=dashscope_api_key
         )
     
     def validate(self) -> None:
@@ -64,3 +67,7 @@ class AppConfig:
         # 验证环境变量文件
         if not os.path.exists('.env'):
             raise ConfigurationError("未找到.env文件，请确保已创建配置文件")
+            
+        # 验证千问API密钥
+        if not self.dashscope_api_key:
+            raise ConfigurationError("请设置环境变量DASHSCOPE_API_KEY以启用图片文字识别功能")
