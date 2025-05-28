@@ -196,14 +196,15 @@ class UniversalMessageHandler(dingtalk_stream.GraphHandler):
             
             # 提取所有图片URL
             if self.image_service:
-                image_urls = self.image_service.extract_image_urls(content)
-                if image_urls:
+                config_results = self.image_service.extract_image_urls(content)
+                print(config_results)
+                if config_results:
                     # 处理所有图片
                     results = []
-                    for url in image_urls:
+                    for url in config_results['urls']:
                         try:
-                            text = self.image_service.recognize_text(url)
-                            results.append(f"图片中包含的文字：\n```\n{text}\n```")
+                            text = self.image_service.recognize_text(url, config_results['demoKey'])
+                            results.append(f"```\n{text}\n```")
                         except Exception as e:
                             results.append(f"处理图片 {url} 时出错：{str(e)}")
 

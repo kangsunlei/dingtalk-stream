@@ -34,7 +34,7 @@ class ImageService:
         )
         self.logger.info("千问API密钥已设置")
     
-    def extract_image_urls(self, text: str) -> list[str]:
+    def extract_image_urls(self, text: str) -> dict:
         """
         使用大模型从文本中提取所有图片URL
         
@@ -42,7 +42,7 @@ class ImageService:
             text: 输入文本
             
         Returns:
-            提取到的图片URL列表，如果没有则返回空列表
+            提取到的图片URL列表，和文案示例 key
             
         Raises:
             HandlerError: 当处理失败时抛出
@@ -51,7 +51,7 @@ class ImageService:
             raise HandlerError("未设置千问API密钥")
             
         try:
-            prompt = f'请从以下文本中提取所有图片URL，以JSON数组格式返回，如果没有图片URL则返回空数组[]。注意：只返回URL数组，不要包含其他文字说明：\n{text}'
+            prompt = f'请从以下文本中提取所有图片URL，和文案的示例key，以JSON对象格式 {{"urls": [], "demoKey": ""}} 返回，如果没有图片URL则返回空对象。注意：只返回JSON对象，不要包含其他文字说明：\n{text}'
             
             self.logger.info("开始调用千问API提取图片URL")
             completion = self.client.chat.completions.create(
@@ -67,20 +67,20 @@ class ImageService:
             
             try:
                 # 尝试解析JSON数组
-                urls = json.loads(answer)
-                if isinstance(urls, list):
-                    return urls
-                return []
+                result = json.loads(answer)
+                if isinstance(result, dict):
+                    return result
+                return {}
             except json.JSONDecodeError:
-                self.logger.warning(f"解析图片URL列表失败，返回空列表: {answer}")
-                return []
+                self.logger.warning(f"解析图片URL列表失败，返回空对象: {answer}")
+                return {}
                 
         except Exception as e:
             error_msg = f"提取图片URL时出错: {str(e)}"
             self.logger.error(error_msg)
             raise HandlerError(error_msg)
 
-    def recognize_text(self, image_url: str) -> str:
+    def recognize_text(self, image_url: str, demoKey: str) -> str:
         """
         识别图片中的文字
         
@@ -106,8 +106,8 @@ class ImageService:
                         "role": "system",
                         "content": [{
                             "type": "text",
-                            "text": """你是一名前端开发工程师，需要将图片中的文字内容转换为结构化配置。请遵循以下规则：
-配置格式：'key'="value"（单引号包裹key，双引号包裹value）
+                            "text": """你是一名文案助理，需要将图片中的文字内容转换为结构化配置。请遵循以下规则：
+配置格式："key"="value"（双引号包裹key 和 value）
 Key生成规则：
 根据文字在图片中的位置生成层级路径（使用点号分隔）
 常见位置映射：
@@ -118,16 +118,16 @@ Key生成规则：
 列表区域 → list
 底部区域 → footer
 中间主体区域 → main
-当用户提供包含自定义前缀的示例（如'dmx.nav.home'）时：
+当用户提供包含自定义前缀的示例（如"dmx.nav.home"）时：
 自动提取前缀部分（dmx）
 将所有新生成的key添加该前缀（dmx.nav.home → dmx.main.title）
-多条配置项按换行分隔，保持字母小写格式
+多条配置项按换行分隔，保留换行符，保持字母小写格式
 严格仅输出配置内容，不包含任何解释说明
 示例输入： [图片包含：顶部导航栏"主页"，中间标题"欢迎使用系统"，底部按钮"立即开始"]
 
-示例输出： 'nav.home'="主页" 'main.title'="欢迎使用系统" 'footer.button'="立即开始"
+示例输出： "mds.nav.home"="主页"\n"mds.main.title"="欢迎使用系统"\n"mds.footer.button"="立即开始"
 
-高级示例： 当用户提供'dmx.nav.home'作为示例时： 'dmx.main.title'="欢迎使用系统" 'dmx.footer.button'="立即开始"
+高级示例： 当用户提供"mds.nav.home"作为示例时： "mds.main.title"="欢迎使用系统"\n"mds.footer.button"="立即开始"
 """
                         }]
                     },
@@ -139,6 +139,10 @@ Key生成规则：
                             "image_url": {
                                 "url": image_url
                             }
+                        },
+                        {
+                            "type": "text",
+                            "text": f"请根据图片中的文字内容，生成配置项，配置项的key可参考「{demoKey}」"
                         }
                     ]
                 }]
